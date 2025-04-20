@@ -1,0 +1,86 @@
+---
+title: "VILLANUEVA_SegundaParteParcial"
+author: "Villanueva Gisela"
+date: "2022-11-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(dbplyr)
+library(RSQLite)
+```
+
+```{r}
+download.file(
+  "https://github.com/GiselaVillanueva/Portfolio_R/raw/refs/heads/main/Test_1/ensayos.db",
+  destfile = "ensayos.db", mode = "wb"
+)
+ensayos <- dbConnect(SQLite(), "ensayos.db")
+dbListTables(ensayos)
+```
+
+## Ejercicio 4.a
+
+```{r}
+datos_ensayos <- tbl(ensayos, "datos_ensayos")
+
+datos_ensayos %>%
+  filter(Rendimiento > 5000) %>%
+  select(IdCultivar, floracion_dias, altura_cm, Rendimiento, Rendimiento_Ajustado, aceite_porcentaje) %>%
+  arrange(IdCultivar)
+
+collect(datos_ensayos)
+```
+
+## Ejercicio 4.b
+
+```{r}
+empresa <- tbl(ensayos, "Empresa")
+cultivares <- tbl(ensayos, "Cultivares")
+
+empresa_y_cultivares <- left_join(empresa, cultivares)
+
+empresa_y_cultivares %>%
+  group_by(Empresa) %>%
+  summarise(Total=count(idCultivar)) %>%
+  arrange(desc(Total))
+```
+
+## Ejercicio 4.c
+
+```{r}
+datos_ensayos %>%
+  group_by(Campania) %>%
+  summarise(Rend_minimo=min(Rendimiento), Rend_medio=mean(Rendimiento), Rend_ajustado_minimo=min(Rendimiento_Ajustado), Rend_ajustado_medio=mean(Rendimiento_Ajustado), Floracion_min=min(floracion_dias), Floracion_media=mean(floracion_dias), Altura_min=min(altura_cm), Altura_media=mean(altura_cm), Aceite_porc_min=min(aceite_porcentaje), Aceite_porc_medio=mean(aceite_porcentaje))
+```
+
+## Ejercicio 4.d
+
+Aclaración: para este ejercicio era necesario hacer join de las 4 tablas. Ya había unido 'empresa' y 'cultivares' en el ejercicio 4.b (resultando el objeto 'empresa_y_cultivares'), por lo tanto, hacía falta unir 'Localidades' y 'datos_ensayos' (en el objeto 'localidades_datos_ensayos') para luego unir las 4 tablas en un solo objeto final, que es 'general_pico'.
+
+Asimismo, tuve que asegurarme que 'id_cultivar' esté en los primeros 2 join ('empresa_y_cultivares' y 'localidades_datos_ensayos'), para luego poder hacer el final.
+
+Los 'collect' fueron para asegurarme de tener todos los campos necesarios en los join.
+
+```{r}
+localidades <- tbl(ensayos, "Localidades")
+
+localidades_datos_ensayos <- left_join(datos_ensayos, localidades)
+```
+
+```{r}
+general_pico <- left_join(empresa_y_cultivares, localidades_datos_ensayos, by=c("idCultivar"="IdCultivar"))
+
+collect(empresa_y_cultivares)
+collect(localidades_datos_ensayos)
+collect(general_pico)
+
+general_pico %>%
+  filter(Nombre_Localidad=="General Pico") %>%
+  distinct(Empresa)
+  
+```
+
