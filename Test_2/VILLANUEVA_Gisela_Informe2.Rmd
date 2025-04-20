@@ -1,0 +1,134 @@
+---
+title: "Informe práctico 2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(rvest)
+library(viridis)
+library(knitr)
+library(kableExtra)
+
+knitr::opts_chunk$set(echo = TRUE, warning=-1)
+
+resultados_cmff <- read_csv("https://raw.githubusercontent.com/GiselaVillanueva/Portfolio_R/refs/heads/main/Test_2/resultados_cmff.csv")
+```
+
+La base de datos `resultados_cmff` contiene información sobre las Copas Mundiales de Fútbol Femenino y su fuente es la [data.world](https://data.world/sportsvizsunday/womens-world-cup-data). En ese sitio encontrarás más datos en inglés si te interesa profundizar.
+
+### **Parte 1**
+
+**Pregunta:** ¿Cómo es la distribución geográfica de los goles por paises? ¿Y la distribución de goles a través del tiempo? 
+
+
+**Introducción:**
+La base de datos 'resultados-cmff' contiene información básica acerca de los partidos disputados en los Mundiales de Fútbol Femenino, desde 1991 hasta 2019. Describe algunos de los datos más importantes, como por ejemplo: año (campo 'anio'), equipos participantes ('equipo' y 'codigo_pais', un código proporcionado por la FIFA), resultado del partido ('resultado'), ronda en la que se dio el partido ('ronda'), cantidad de goles ('goles'), entre otros.
+En esta Parte, utilizaremos los siguientes campos del dataset: 'goles' y 'codigo_pais'. Asimismo, como ampliaremos en la sección Enfoque, importaremos un dataset de Wikipedia (al que llamaremos 'lista_fifa_iso'), el cual nos dará el código ISO de cada país/equipo.
+
+**Enfoque:**
+Para responder a las preguntas planteadas usaremos dos gráficas: en primer lugar, un mapa mundial de la librería 'rnaturalearth', que mostrará la cantidad de goles por cada país. Esta es la gráfica más apropiada, ya que nos da una vista completa de todos los países, con un código que se manipula fácilmente. Dado que para este tipo de gráficas precisamos contar con el código ISO de cada país/equipo, obtendremos un dataset de Wikipedia (el cual contiene cada código de país de FIFA y su correspondiente en ISO) y realizaremos un 'join' entre ambos datasets ('resultados_cmff' y 'lista_fifa_iso'). **Es importante realizar la siguiente aclaración: ISO no tiene un código para Escocia y otro para Inglaterra, sino que los considera a ambos parte de un solo país: Gran Bretaña. Por ello, solo a efectos de realizar el mapa, optaremos por 'unir' el total de goles de ambos países.**
+En segundo lugar, para mostrar los goles anotados en cada Mundial, utilizaremos un gráfico de barras verticales, ordenados por año de competencia. Dicha gráfica (con las accesorias de puntos y líneas) muestra de manera obvia la cantidad de goles por Mundial y los saltos entre mundiales.
+
+**Analisis:**
+
+
+```{r, fig.width=8.3, fig.height=4, cantidad-goles-mundiales-femeninos, fig.alt="Mapa del mundo que muestra la cantidad de goles realizado por cada Selección de Fútbol Femenino en todos los Mundiales, en una escala de 1 a 138. Entre los países que más goles convirtieron se encuentran Estados Unidos, Alemania y Noruega, mientras que al fondo de la escala están Argentina, México, Sudáfrica y España."}
+
+url <- "https://simple.wikipedia.org/wiki/Comparison_of_IOC,_FIFA,_and_ISO_3166_country_codes"
+lista_fifa_iso <- url %>% 
+  read_html() %>% 
+  html_table(fill = TRUE) %>% .[[1]] %>% 
+  mutate(ISO = case_when(Country == "England" ~ "GBR", 
+                        Country == "Scotland" ~ "GBR", 
+                        .default = ISO)) %>% 
+  select(FIFA, ISO) 
+
+
+nuevo_resultados_cmff <- left_join(resultados_cmff, lista_fifa_iso, by = c("codigo_pais" = "FIFA")) %>% 
+  group_by(ISO) %>% 
+  summarise(total_goles=sum(goles))
+
+
+mapa <- rnaturalearth::ne_countries(returnclass = "sf")
+
+
+full_join(nuevo_resultados_cmff, mapa, by=c("ISO"="gu_a3")) %>% 
+  ggplot() +
+  geom_sf(data=mapa, inherit.aes = FALSE, fill = NA) +
+  geom_sf(aes(fill=total_goles, geometry=geometry)) +
+  theme(legend.key.size = unit(0.5, 'cm'),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=8)) +
+  scale_fill_viridis_c(option="plasma") +
+  labs(fill="Total de goles")
+```
+
+```{r total-goles-por-mundial, fig.alt="El siguiente gráfico de barras muestra el total de goles convertidos en cada Mundial de Fútbol Femenino, desde 1991 en adelante, en una escala de 0 a 150. Podemos observar que entre 1991 y 2011 hay algunas variaciones, y luego, en 2015, se da un salto importante, que prácticamente se mantiene en 2019."}
+
+resultados_cmff %>% 
+  group_by(anio) %>% 
+  summarise(total_goles=sum(goles)) %>% 
+  ggplot(aes(x=anio, y=total_goles)) +
+  geom_col(color="black", fill="#D44292", width=3) +
+  labs(x="Años de competencia", y="Cant. total de goles") +
+  scale_x_continuous(breaks = seq(1991, 2019, 4)) +
+  scale_y_continuous(breaks = seq(0, 150, 25)) +
+  geom_line() +
+  geom_point()
+```
+
+
+**Discusión:**
+La distribución de goles entre países es clara: el que más goles realizó es Estados Unidos, con una cantidad cercana a los 150 tantos. En un escalón inferior se encuentra Alemania, con aproximadamente 120. A contracara, entre los países que menos goles realizaron se encuentran Argentina, México, Sudáfrica y España, con un total casi nulo.
+En cuanto a la cantidad de goles por competencia, se observan algunas variaciones entre 1991 y 2011 (siendo esta última la competencia con menos goles: cerca de 87). La mayor cantidad se da en el Mundial de 2015, con casi 150 tantos.
+
+### **Parte 2**
+
+**Pregunta:**
+Los países que tienen más goles, ¿son también los que tienen más victorias?
+
+**Introducción:**
+Como hemos dicho en la primera sección, los campos describen cada Mundial de manera básica. En este caso, los que usaremos a efectos de contestar la pregunta son los siguientes: 'resultado' (nos dice si se trata de una victoria, empate o derrota), 'goles' (tantos marcados por cada equipo en cada partido) y 'equipo'. Los dos primeros nos servirán para calcular nuevos campos; sobre esto entraremos en detalle en 'Enfoque'.
+
+**Enfoque:**
+Para contestar la pregunta, usaremos un gráfico de puntos, con Total de victorias vs Total de goles (calculados a partir de 'resultado' y 'goles' respectivamente), mapeando el color a 'equipo'. El tipo de gráfico elegido es el más correcto, ya que nos permite poner en juego al mismo tiempo todas las variables necesarias. Para que el mismo sea más legible, filtraremos los países que tengan una cantidad de goles igual o superior a la media. A modo de complemento, utilizaremos geom_smooth, que nos proporcionará una curva de tendencia.
+En segundo lugar, incluyendo a todos los países participantes, realizaremos una tabla utilizando el paquete 'kable', la cual nos permitirá identificar posibles casos en los que no se cumpla nuestra hipótesis.  **Al contrario de la Parte 1, en esta sección graficaremos los países de Gran Bretaña de manera separada.**
+
+**Análisis:**
+
+```{r victorias-vs-goles, fig.alt="El siguiente gráfico de puntos muestra la distribución de los equipos en relación al total de goles convertidos (de 0 a 138) y de victorias obtenidas (entre 0 y 42). Para dar mayor legibilidad al gráfico, se filtran los países con un total de goles igual o superior a la media, y se agrega una curva de tendencia. Como podemos ver, puede establecerse una relación entre ambos totales (es decir: a más goles, más victorias)."}
+
+resultados_cmff %>% 
+  group_by(equipo) %>% 
+  mutate(victorias=ifelse(resultado=="Victoria", 1, 0)) %>% 
+  summarise(total_victorias=sum(victorias), total_goles=sum(goles)) %>% 
+  filter(total_goles >= mean(total_goles)) %>% 
+  ggplot(aes(x=total_victorias, y=total_goles)) +
+  geom_point(aes(color=equipo), size=5) +
+  geom_smooth(color="black", size=0.5) +
+  scale_color_viridis_d(option="plasma") +
+  labs(x="Total de victorias", y="Total de goles", color="Equipo")
+```
+
+```{r victorias-vs-goles-tabla, fig.alt="La siguiente tabla nos muestra la cantidad de victorias obtenidas y de goles convertidos por cada equipo participante en los Mundiales de Fútbol Femenino. Como podemos ver, ambas métricas van en el mismo sentido (es decir: a más goles, más victorias), con excepción de los últimos lugares de la tabla, donde no siempre se cumple dicha relación."}
+
+tabla_victorias_vs_goles <- resultados_cmff %>% 
+  group_by(equipo) %>% 
+  select(equipo, goles, resultado) %>% 
+  mutate(victorias=ifelse(resultado=="Victoria", 1, 0)) %>%
+  summarise(total_victorias=sum(victorias), total_goles=sum(goles)) %>% 
+  arrange(desc(total_goles))
+  
+tabla_victorias_vs_goles %>% 
+  kable(col.names = c("Equipo", "Total de victorias", "Total de goles"),
+        format.args = list(decimal.mark=",", big.mark="."),
+        align = "ccc") %>%
+  collapse_rows(1) %>% 
+  row_spec(0, bold=T) %>% 
+  row_spec(row=seq(2, nrow(tabla_victorias_vs_goles), by=2), background = "#FFFF66") %>% 
+  kable_classic_2()
+```
+
+**Discusión:**
+Tal cual nos muestran tanto la distribución de los puntos como la curva de tendencia, existe una relación entre el total de goles y el de victorias: a más goles, más victorias. Esto se corrobora leyendo la tabla, ya que en la misma se ve cómo descienden ambos totales. No obstante, también vemos que, entre los últimos equipos de la tabla (los que hicieron 5 o menos goles), esta relación se desdibuja: algunos tienen 0 o 1 victoria, sin importar la cantidad de goles.
