@@ -1,7 +1,7 @@
 Este repo contiene una muestra de mis trabajos en R.
 
 
-*Análisis exploratorio de datos: ver carpeta "Análisis DB"
+*Análisis exploratorio de datos: ver carpeta "Análisis DB". El código contiene comentarios (es decir, es auto-descriptivo).
 
 *Shiny app: ver carpeta "Shiny". En la misma se puede consultar una base de datos, observar métricas y consultar features actuales + futuras.
 
